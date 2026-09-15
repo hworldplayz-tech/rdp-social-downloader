@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Social Media Video Downloader</title>
+    <!-- Tailwind CSS for quick, modern styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col items-center justify-center p-4">
+
+    <div class="max-w-md w-full bg-white rounded-xl shadow-lg p-6 space-y-6">
+        <div class="text-center">
+            <h1 class="text-2xl font-bold text-gray-800">Social Video Downloader</h1>
+            <p class="text-sm text-gray-500 mt-1">Paste your video link below to extract & download</p>
+        </div>
+
+        <!-- Input Form -->
+        <div class="space-y-4">
+            <div>
+                <label for="videoUrl" class="block text-sm font-medium text-gray-700">Video URL</label>
+                <input type="url" id="videoUrl" placeholder="https://www.youtube.com/watch?v=..." 
+                    class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+            </div>
+
+            <button id="fetchBtn" onclick="handleExtract()" 
+                class="w-full bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 transition duration-200">
+                Extract Video
+            </button>
+        </div>
+
+        <!-- Loading Indicator -->
+        <div id="loading" class="hidden text-center text-gray-500 py-4">
+            <svg class="animate-spin h-6 w-6 mx-auto text-blue-600 mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            >
+            </svg>
+            Processing your request...
+        </div>
+
+        <!-- Result Container (Hidden by default) -->
+        <div id="resultContainer" class="hidden border-t border-gray-200 pt-4 space-y-4">
+            <div id="videoInfo" class="text-sm text-gray-700 space-y-1">
+                <!-- Video metadata will be injected here -->
+            </div>
+
+            <!-- Download Action Button -->
+            <a id="downloadBtn" href="#" target="_blank" 
+                class="block text-center w-full bg-green-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-700 transition duration-200">
+                Download Video
+            </a>
+        </div>
+        
+        <!-- Error Message Display -->
+        <div id="errorMsg" class="hidden text-sm text-red-600 bg-red-50 p-3 rounded-lg text-center"></div>
+    </div>
+
+    <!-- JavaScript Logic -->
+    <script>
+        async function handleExtract() {
+            const urlInput = document.getElementById('videoUrl').value.trim();
+            const fetchBtn = document.getElementById('fetchBtn');
+            const loading = document.getElementById('loading');
+            const resultContainer = document.getElementById('resultContainer');
+            const errorMsg = document.getElementById('errorMsg');
+            const videoInfo = document.getElementById('videoInfo');
+            const downloadBtn = document.getElementById('downloadBtn');
+
+            // Reset UI states
+            errorMsg.classList.add('hidden');
+            resultContainer.classList.add('hidden');
+
+            if (!urlInput) {
+                errorMsg.innerText = "Please enter a valid URL.";
+                errorMsg.classList.remove('hidden');
+                return;
+            }
+
+            // Show loading, disable button
+            loading.classList.remove('hidden');
+            fetchBtn.disabled = true;
+
+            try {
+                // Call your API endpoint using fetch (POST request)
+                const response = await fetch('https://www.smdownloader.com/api/extract', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ url: urlInput })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.message || 'Failed to extract video details.');
+                }
+
+                // Assuming your backend returns attributes like title, duration, and download_url
+                // (Adjust property keys below to match whatever your Flask backend actually returns)
+                videoInfo.innerHTML = `
+                    <p class="font-semibold text-gray-900">Title: ${data.title || 'Unknown Video'}</p>
+                    <p class="text-xs text-gray-500">Duration: ${data.length || data.duration || 'N/A'}</p>
+                `;
+
+                // Set the download link destination
+                downloadBtn.href = data.download_url || data.url || '#';
+
+                // Show result container
+                resultContainer.classList.remove('hidden');
+
+            } catch (err) {
+                errorMsg.innerText = err.message || "An error occurred while communicating with the server.";
+                errorMsg.classList.remove('hidden');
+            } finally {
+                // Hide loading, re-enable button
+                loading.classList.add('hidden');
+                fetchBtn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
