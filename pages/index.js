@@ -6,6 +6,7 @@ export default function Home() {
   const [formats, setFormats] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [previewUrl, setPreviewUrl] = useState(null)
 
   const fetchInfo = async () => {
     setError(null)
@@ -20,6 +21,20 @@ export default function Home() {
       if (!res.ok) throw new Error(await res.text())
       const data = await res.json()
       setInfo(data)
+      // Populate formats from the video_info response (normalized by server)
+      const fm = data.formats || []
+      setFormats(fm)
+
+      // Choose a preview URL: prefer mp4/video entries
+      const choosePreview = (formats) => {
+        if (!formats || formats.length === 0) return null
+        let vid = formats.find(f => f.downloadUrl && ((f.container && f.container.toLowerCase().includes('mp4')) || (f.qualityLabel && /p$/.test(f.qualityLabel))))
+        if (!vid) vid = formats.find(f => f.downloadUrl && f.audioUrl == null)
+        if (!vid) vid = formats.find(f => f.downloadUrl)
+        return vid ? vid.downloadUrl : null
+      }
+
+      setPreviewUrl(choosePreview(fm))
     } catch (err) {
       setError(err.message)
     } finally {
@@ -27,25 +42,9 @@ export default function Home() {
     }
   }
 
-  const fetchResolutions = async () => {
-    setError(null)
-    setFormats([])
-    setLoading(true)
-    try {
-      const res = await fetch('/api/available_resolutions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url })
-      })
-      if (!res.ok) throw new Error(await res.text())
-      const data = await res.json()
-      setFormats(data.formats || [])
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
-  }
+  // Removed separate "available resolutions" fetch because some upstream
+  // extractors (Cloudflare-protected) return HTML errors. Use the
+  // video info response to populate formats, preview and downloads.
 
   return (
     <div style={{ fontFamily: 'Arial, sans-serif', padding: 24, maxWidth: 900, margin: '0 auto' }}>
@@ -65,9 +64,6 @@ export default function Home() {
         <button onClick={fetchInfo} disabled={loading || !url} style={{ marginRight: 8 }}>
           Get Video Info
         </button>
-        <button onClick={fetchResolutions} disabled={loading || !url}>
-          Get Available Resolutions
-        </button>
       </div>
 
       {loading && <p>Loading…</p>}
@@ -78,6 +74,17 @@ export default function Home() {
           <h2>{info.title}</h2>
           <p>Author: {info.author}</p>
           <p>Length: {info.lengthSeconds}s • Views: {info.viewCount}</p>
+          {info.thumbnail && (
+            <div style={{ marginTop: 8 }}>
+              <img src={info.thumbnail} alt="thumbnail" style={{ maxWidth: '100%', height: 'auto' }} />
+            </div>
+          )}
+          {/* Preview video if we have a direct playable URL */}
+          {previewUrl && (
+            <div style={{ marginTop: 8 }}>
+              <video src={previewUrl} controls style={{ maxWidth: '100%' }} />
+            </div>
+          )}
           {info.description && (
             <details>
               <summary>Description</summary>
@@ -100,11 +107,11 @@ export default function Home() {
               </tr>
             </thead>
             <tbody>
-              {formats.map((f) => (
-                <tr key={f.itag}>
-                  <td style={{ padding: 8 }}>{f.qualityLabel || f.audioBitrate ? `${f.qualityLabel || 'audio'} ${f.audioBitrate ? '(audio)' : ''}` : f.itag}</td>
-                  <td style={{ padding: 8 }}>{f.container}</td>
-                  <td style={{ padding: 8 }}>{f.itag}</td>
+              {formats.map((f, idx) => (
+                <tr key={f.itag || idx}>
+                  <td style={{ padding: 8 }}>{f.qualityLabel || (f.quality ? f.quality : (f.audioBitrate ? 'audio' : f.itag))}</td>
+                  <td style={{ padding: 8 }}>{f.container || f.extension || ''}</td>
+                  <td style={{ padding: 8 }}>{f.itag || ''}</td>
                   <td style={{ padding: 8 }}>
                     {f.downloadUrl ? (
                       <a href={`/api/download?downloadUrl=${encodeURIComponent(f.downloadUrl)}`}>
