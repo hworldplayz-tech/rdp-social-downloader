@@ -64,6 +64,22 @@ export default async function handler(req, res) {
     }
 
     if (!externalRes) {
+      // If the URL is a googlevideo signed URL it is often IP- or client-bound
+      // (contains ip= or sparams tying it to the original requester). In that
+      // case the server (Vercel) cannot fetch it from its own IP. Fall back to
+      // redirecting the user's browser to the direct URL so the download occurs
+      // from the user's IP (works in most cases).
+      try {
+        const parsed = new URL(downloadUrl)
+        if (parsed.hostname && parsed.hostname.includes('googlevideo.com')) {
+          // Use 307 Temporary Redirect to preserve method semantics
+          res.setHeader('Cache-Control', 'no-store')
+          return res.redirect(307, downloadUrl)
+        }
+      } catch (e) {
+        // ignore parse errors
+      }
+
       return res.status(502).end(`Failed to fetch remote file${lastErrText ? `: ${lastErrText}` : ''}`)
     }
 
