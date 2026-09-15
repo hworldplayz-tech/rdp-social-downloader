@@ -21,18 +21,50 @@ export default async function handler(req, res) {
   }
 
   try {
-    const externalRes = await fetch(downloadUrl, {
-      headers: {
+    // Try fetching with a few header variations to improve chances with googlevideo URLs
+    const headerSets = [
+      {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36',
         Referer: 'https://www.smdownloader.com/',
         Origin: 'https://www.smdownloader.com',
-        'Accept-Language': 'en-US,en;q=0.9'
+        'Accept-Language': 'en-US,en;q=0.9',
+        Accept: 'video/*'
+      },
+      {
+        // alternate: present as YouTube referrer
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36',
+        Referer: 'https://www.youtube.com/',
+        'Accept-Language': 'en-US,en;q=0.9',
+        Accept: 'video/*'
       }
-    })
-    if (!externalRes.ok) {
-      const text = await externalRes.text()
-      console.error('external download fetch failed', externalRes.status, text)
-      return res.status(externalRes.status).end(text || 'Failed to fetch remote file')
+    ]
+
+    let externalRes = null
+    let lastErrText = null
+    for (const headers of headerSets) {
+      try {
+        externalRes = await fetch(downloadUrl, { headers })
+      } catch (e) {
+        console.error('fetch error for downloadUrl', e)
+        lastErrText = String(e?.message || e)
+        externalRes = null
+      }
+      if (externalRes) {
+        if (!externalRes.ok) {
+          // try to capture body for debugging
+          try { lastErrText = await externalRes.text() } catch (e) { lastErrText = String(e?.message || e) }
+          console.error('external download fetch failed', externalRes.status, lastErrText)
+          // try next header set
+          externalRes = null
+          continue
+        }
+        // success
+        break
+      }
+    }
+
+    if (!externalRes) {
+      return res.status(502).end(`Failed to fetch remote file${lastErrText ? `: ${lastErrText}` : ''}`)
     }
 
     const contentType = externalRes.headers.get('content-type') || 'application/octet-stream'
@@ -43,9 +75,40 @@ export default async function handler(req, res) {
     if (contentLength) res.setHeader('Content-Length', contentLength)
     if (disposition) res.setHeader('Content-Disposition', disposition)
 
-    // Buffering for now — streaming could be implemented if needed
-    const buffer = Buffer.from(await externalRes.arrayBuffer())
-    res.status(200).end(buffer)
+    // Stream the response body to the client to avoid buffering large files
+    // Support both WHATWG ReadableStream and Node Readable stream
+    const body = externalRes.body
+    if (!body) {
+      // fallback to buffering small responses
+      const buffer = Buffer.from(await externalRes.arrayBuffer())
+      res.status(200).end(buffer)
+      return
+    }
+
+    // If it's a web ReadableStream (has getReader), use reader
+    if (typeof body.getReader === 'function') {
+      res.status(200)
+      const reader = body.getReader()
+      try {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          res.write(Buffer.from(value))
+        }
+      } catch (e) {
+        console.error('stream pipe error', e)
+      } finally {
+        res.end()
+      }
+      return
+    }
+
+    // Otherwise assume Node.js Readable and pipe
+    if (body.pipe) {
+      res.status(200)
+      body.pipe(res)
+      return
+    }
   } catch (err) {
     console.error('download proxy error', err)
     return res.status(500).end(String(err?.message || err))
