@@ -20,11 +20,18 @@ export default async function handler(req, res) {
   }
 
   try {
-    const externalRes = await fetch(downloadUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible)' } })
+    const externalRes = await fetch(downloadUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36',
+        Referer: 'https://www.smdownloader.com/',
+        Origin: 'https://www.smdownloader.com',
+        'Accept-Language': 'en-US,en;q=0.9'
+      }
+    })
     if (!externalRes.ok) {
       const text = await externalRes.text()
       console.error('external download fetch failed', externalRes.status, text)
-      return res.status(502).end('Failed to fetch remote file')
+      return res.status(externalRes.status).end(text || 'Failed to fetch remote file')
     }
 
     const contentType = externalRes.headers.get('content-type') || 'application/octet-stream'

@@ -13,20 +13,28 @@ export default async function handler(req, res) {
   try {
     const apiRes = await fetch('https://www.smdownloader.com/api/extract', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36',
+        Referer: 'https://www.smdownloader.com/',
+        Origin: 'https://www.smdownloader.com',
+        'Accept-Language': 'en-US,en;q=0.9'
+      },
       body: JSON.stringify({ url })
     })
 
     if (!apiRes.ok) {
       const text = await apiRes.text()
       console.error('smdownloader api error', apiRes.status, text)
-      return res.status(500).json({ error: `SMDownloader error: ${apiRes.status}` })
+      // Pass through status and body to help debugging client-side
+      return res.status(apiRes.status).json({ error: text || `SMDownloader error: ${apiRes.status}` })
     }
 
     const payload = await apiRes.json()
     if (!payload || !payload.ok) {
       console.error('smdownloader returned non-ok', payload)
-      return res.status(500).json({ error: 'SMDownloader returned an error' })
+      return res.status(502).json({ error: payload || 'SMDownloader returned an error' })
     }
 
     const data = payload.data || {}
