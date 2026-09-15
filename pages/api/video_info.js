@@ -40,30 +40,24 @@ export default async function handler(req, res) {
     // Try parse JSON, otherwise return raw text
     try {
       const payload = JSON.parse(text)
-      // Normalize payload: ensure thumbnail and formats list are in a friendly shape
+      // Normalize RapidAPI response (they return `medias` in the sample)
       const out = {
         title: payload.title || payload.name || null,
-        author: payload.author || payload.channel || null,
-        description: payload.description || payload.desc || null,
-        lengthSeconds: payload.lengthSeconds || payload.duration || payload.length || null,
-        viewCount: payload.viewCount || payload.views || null,
-        thumbnail: payload.thumbnail || payload.thumbnailUrl || (payload.thumbnails && payload.thumbnails[0]) || null,
-        // formats: prefer payload.formats or payload.data.media or payload.streams
-        formats: (payload.formats && payload.formats.map(fmt => ({
-          itag: fmt.itag || fmt.itagNo || fmt.itagNumber || null,
-          qualityLabel: fmt.qualityLabel || fmt.quality || fmt.label || null,
-          container: fmt.container || fmt.extension || fmt.mimeType || null,
-          downloadUrl: fmt.url || fmt.downloadUrl || fmt.direct || null,
-          audioUrl: fmt.audioUrl || null,
-          size: fmt.clen || fmt.size || fmt.filesizeBytes || null,
-          audioBitrate: fmt.audioBitrate || null
-        }))) || (payload.data && payload.data.media && payload.data.media.map(m => ({
-          itag: m.itag || null,
-          qualityLabel: m.quality || m.label || null,
-          container: m.container || m.extension || null,
-          downloadUrl: m.url && m.url.startsWith('http') ? m.url : (m.url ? `https://www.smdownloader.com${m.url}` : null),
-          size: m.filesizeBytes || null
-        }))) || payload.streams || payload.items || []
+        thumbnail: payload.thumbnail || payload.thumbnailUrl || null,
+        duration: payload.duration || payload.length || null,
+        source: payload.source || null,
+        // Map `medias` -> formats
+        formats: (payload.medias && Array.isArray(payload.medias) ? payload.medias.map(m => ({
+          downloadUrl: m.url || null,
+          audioUrl: m.audioUrl || null,
+          qualityLabel: m.quality || null,
+          container: m.extension || m.container || null,
+          size: m.size || m.clen || null,
+          formattedSize: m.formattedSize || null,
+          videoAvailable: !!m.videoAvailable,
+          audioAvailable: !!m.audioAvailable,
+          requiresMerge: !!m.requiresMerge
+        })) : []),
       }
 
       return res.status(apiRes.status).json(out)

@@ -9,11 +9,12 @@ export default async function handler(req, res) {
   const { downloadUrl } = req.query || {}
   if (!downloadUrl) return res.status(400).end('Missing downloadUrl')
 
-  // Only allow SMDownloader domain for safety
+  // Allow googlevideo.com and smdownloader.com hosts (RapidAPI returns googlevideo URLs)
   try {
     const parsed = new URL(downloadUrl)
-    if (!parsed.hostname.includes('smdownloader.com')) {
-      return res.status(400).end('downloadUrl must be from smdownloader.com')
+    const host = parsed.hostname || ''
+    if (!host.includes('smdownloader.com') && !host.includes('googlevideo.com')) {
+      return res.status(400).end('downloadUrl must be from smdownloader.com or googlevideo.com')
     }
   } catch (e) {
     return res.status(400).end('Invalid downloadUrl')
