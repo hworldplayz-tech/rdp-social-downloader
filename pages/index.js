@@ -106,9 +106,13 @@ export default function Home() {
                   <td style={{ padding: 8 }}>{f.container}</td>
                   <td style={{ padding: 8 }}>{f.itag}</td>
                   <td style={{ padding: 8 }}>
-                    <a href={`/api/download?url=${encodeURIComponent(url)}&itag=${f.itag}`}>
-                      Download
-                    </a>
+                    {f.downloadUrl ? (
+                      <a href={`/api/download?downloadUrl=${encodeURIComponent(f.downloadUrl)}`}>
+                        Download
+                      </a>
+                    ) : (
+                      <span>Not available</span>
+                    )}
                   </td>
                 </tr>
               ))}
