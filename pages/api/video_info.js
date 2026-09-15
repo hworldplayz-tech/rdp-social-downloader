@@ -11,40 +11,39 @@ export default async function handler(req, res) {
   if (!url) return res.status(400).json({ error: 'Missing url in request body' })
 
   try {
-    const apiRes = await fetch('https://www.smdownloader.com/api/extract', {
-      method: 'POST',
+    // Use RapidAPI yt-downloader1 as requested. Uses RAPIDAPI_KEY env or provided fallback.
+    const RAPID_HOST = 'yt-downloader1.p.rapidapi.com'
+    const RAPID_KEY = process.env.RAPIDAPI_KEY || '62986a77ebmsh62840eb3353b7adp1e4b2ejsne434dd8370ea'
+
+    // extract video id for 'key' query param as example in user's curl
+    let videoId = null
+    try {
+      const u = new URL(url)
+      if (u.searchParams && u.searchParams.get('v')) videoId = u.searchParams.get('v')
+      if (!videoId && u.hostname === 'youtu.be') videoId = u.pathname.replace(/^\//, '')
+    } catch (e) {
+      const m = (url || '').match(/(?:v=|\/)([0-9A-Za-z_-]{11})/)
+      if (m) videoId = m[1]
+    }
+
+    const queryUrl = `https://${RAPID_HOST}/api?url=${encodeURIComponent(url)}${videoId ? `&key=${encodeURIComponent(videoId)}` : ''}`
+    const apiRes = await fetch(queryUrl, {
+      method: 'GET',
       headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36',
-        Referer: 'https://www.smdownloader.com/',
-        Origin: 'https://www.smdownloader.com',
-        'Accept-Language': 'en-US,en;q=0.9'
-      },
-      body: JSON.stringify({ url })
+        'x-rapidapi-host': RAPID_HOST,
+        'x-rapidapi-key': RAPID_KEY,
+        Accept: 'application/json'
+      }
     })
 
-    if (!apiRes.ok) {
-      const text = await apiRes.text()
-      console.error('smdownloader api error', apiRes.status, text)
-      // Pass through status and body to help debugging client-side
-      return res.status(apiRes.status).json({ error: text || `SMDownloader error: ${apiRes.status}` })
+    const text = await apiRes.text()
+    // Try parse JSON, otherwise return raw text
+    try {
+      const payload = JSON.parse(text)
+      return res.status(apiRes.status).json(payload)
+    } catch (e) {
+      return res.status(apiRes.status).send(text)
     }
-
-    const payload = await apiRes.json()
-    if (!payload || !payload.ok) {
-      console.error('smdownloader returned non-ok', payload)
-      return res.status(502).json({ error: payload || 'SMDownloader returned an error' })
-    }
-
-    const data = payload.data || {}
-    // return a compact video info object
-    return res.status(200).json({
-      title: data.title || null,
-      description: data.description || null,
-      sourceUrl: data.sourceUrl || null,
-      thumbnails: data.media && data.media[0] && data.media[0].thumbnail ? [data.media[0].thumbnail] : []
-    })
   } catch (err) {
     console.error('video_info proxy error', err)
     return res.status(500).json({ error: String(err?.message || err) })
